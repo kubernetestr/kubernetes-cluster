@@ -61,6 +61,7 @@ $kubernetesMasterList = $kubernetesMasterList[1..-1]
 
 for i in 1..KUBERNETES_NODE_COUNT
 $kubernetesNodes << {
+    number: i,
     name: "#{$kubernetesNodeNameSuffix}#{i}",
     hostname: "#{$kubernetesNodeNameSuffix}#{i}",
     ipAddress: "#{$ipGroup}.#{$kubernetesNodeStartIp + i}"
@@ -72,7 +73,7 @@ for node in $kubernetesNodes
 end
 
 $cmdInitialSetup = <<SCRIPT
-# yum -y update
+yum -y update
 
 service firewalld stop
 systemctl disable firewalld
@@ -402,7 +403,7 @@ cat > 10-bridge.conf <<EOF
     "ipam": {
         "type": "host-local",
         "ranges": [
-          [{"subnet": "10.200.0.0/16"}]
+          [{"subnet": "10.200.½{number}.0/24"}]
         ],
         "routes": [{"dst": "0.0.0.0/0"}]
     }
@@ -440,7 +441,7 @@ ExecStart=/usr/bin/kubelet \
   --tls-private-key-file=/var/lib/kubernetes/%{hostname}-key.pem \
   --runtime-cgroups=/systemd/system.slice \
   --kubelet-cgroups=/systemd/system.slice \
-  --pod-cidr=10.200.0.0/16 \
+  --pod-cidr=10.200.%{number}.0/24 \
   --v=2
 
 Restart=on-failure
@@ -539,7 +540,7 @@ Vagrant.configure("2") do |config|
       box.vm.synced_folder ".", "/vagrant", disabled: false, type: "rsync", rsync__auto: true
       box.vm.provision "shell", inline: $cmdInitialSetup
       box.vm.provision "shell", inline: $cmdNodeCertificateSetup % {hostname: node[:hostname], ipAddress: node[:ipAddress]}
-      box.vm.provision "shell", inline: $cmdKubernetesNodeSetup % {hostname: node[:hostname]}
+      box.vm.provision "shell", inline: $cmdKubernetesNodeSetup % {number: node[:number] - 1, hostname: node[:hostname]}
       box.vm.provision "shell", inline: $cmdReboot
     end
   end
