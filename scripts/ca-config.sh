@@ -101,6 +101,6 @@ cfssl gencert \
   -ca=../ca.pem \
   -ca-key=../ca-key.pem \
   -config=../ca-config.json \
-  -hostname=10.240.0.21,10.240.0.22,10.240.0.23,kubemaster1,kubemaster2,kubemaster3,127.0.0.1,localhost \
+  -hostname=10.32.0.1,10.240.0.21,10.240.0.22,10.240.0.23,kubemaster1,kubemaster2,kubemaster3,127.0.0.1,localhost \
   -profile=kubernetes \
   kubernetes-csr.json | cfssljson -bare kubernetes
