@@ -6,7 +6,7 @@ BINARY_PATH = "/vagrant/binaries/"
 
 ETCD_SERVER_COUNT = 3
 KUBERNETES_MASTER_COUNT = 2
-KUBERNETES_NODE_COUNT = 4
+KUBERNETES_NODE_COUNT = 2
 
 $ipGroup = "10.240.0"
 $domainName = "example.com"
@@ -58,7 +58,6 @@ for master in $kubernetesMasters
 end
 $kubernetesMasterList = $kubernetesMasterList[1..-1]
 
-
 for i in 1..KUBERNETES_NODE_COUNT
 $kubernetesNodes << {
     number: i,
@@ -73,7 +72,7 @@ for node in $kubernetesNodes
 end
 
 $cmdInitialSetup = <<SCRIPT
-yum -y update
+# yum -y update
 
 service firewalld stop
 systemctl disable firewalld
@@ -403,7 +402,7 @@ cat > 10-bridge.conf <<EOF
     "ipam": {
         "type": "host-local",
         "ranges": [
-          [{"subnet": "10.200.½{number}.0/24"}]
+          [{"subnet": "10.200.%{number}.0/24"}]
         ],
         "routes": [{"dst": "0.0.0.0/0"}]
     }
@@ -527,7 +526,7 @@ Vagrant.configure("2") do |config|
     end
   end
 
-    $kubernetesNodes.each do |node|
+  $kubernetesNodes.each do |node|
     config.vm.define node[:name] do |box|
       box.vm.box = BOX_OS
       box.vm.box_version = BOX_VERSION
