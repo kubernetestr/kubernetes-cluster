@@ -323,7 +323,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable kube-scheduler
 sudo systemctl start kube-scheduler
 
+cat >> /etc/profile >>"EOF"
 source <(kubectl completion bash)
+EOF
 SCRIPT
 
 $cmdKubernetesNodeSetup = <<SCRIPT
@@ -479,8 +481,6 @@ sudo mv kube-proxy.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable kube-proxy
 sudo systemctl start kube-proxy
-
-source <(kubectl completion bash)
 SCRIPT
 
 $cmdReboot = <<SCRIPT
