@@ -21,12 +21,15 @@ To ping pods within pods running on different nodes, run below commands on the h
     - ...
 
 ## DNS Addon
+Run the below command to start kube-dns:
+  * `kubectl apply -f https://raw.githubusercontent.com/acedemand/kubernetes-cluster/master/deployments/kube-dns.yaml`
+
 Run the below command to start flannel:
-  * `kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml`
+  * `kubectl apply -f https://raw.githubusercontent.com/acedemand/kubernetes-cluster/master/deployments/kube-flannel.yaml`
 
 ## Dashboard
 Run the below command to start dashboard:
-  * `kubectl apply -f https://raw.githubusercontent.com/kubernetes/dashboard/master/src/deploy/alternative/kubernetes-dashboard.yaml`
+  * `kubectl apply -f https://raw.githubusercontent.com/acedemand/kubernetes-cluster/master/deployments/kubernetes-dashboard.yaml`
   * Run `kubectl -n kube-system edit service kubernetes-dashboard`
   * Change `type: ClusterIP` to `type: NodePort`
   * Run `kubectl -n kube-system get service kubernetes-dashboard` to get exposed service port.
