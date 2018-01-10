@@ -23,7 +23,6 @@ To ping pods within pods running on different nodes, run below commands on the h
 ## DNS Addon
 Run the below command to start kube-dns:
   * `kubectl apply -f https://raw.githubusercontent.com/acedemand/kubernetes-cluster/master/deployments/kube-dns.yaml`
-
 Run the below command to start flannel:
   * `kubectl apply -f https://raw.githubusercontent.com/acedemand/kubernetes-cluster/master/deployments/kube-flannel.yaml`
 
