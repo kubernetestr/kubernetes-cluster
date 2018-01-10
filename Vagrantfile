@@ -29,11 +29,11 @@ $kubernetesNodes = []
 $hostsFileContent = ""
 
 for i in 1..ETCD_SERVER_COUNT
-$etcdServers << {
-    name: "#{$etcdServerNamePrefix}#{i}",
-    hostname: "#{$etcdServerNamePrefix}#{i}",
-    ipAddress: "#{$ipGroup}.#{$etcdServersStartIp + i}"
-}
+  $etcdServers << {
+      name: "#{$etcdServerNamePrefix}#{i}",
+      hostname: "#{$etcdServerNamePrefix}#{i}",
+      ipAddress: "#{$ipGroup}.#{$etcdServersStartIp + i}"
+  }
 end
 
 for etcd in $etcdServers
@@ -45,11 +45,11 @@ $etcdClusterConfig = $etcdClusterConfig[1..-1]
 $etcdServerList = $etcdServerList[1..-1]
 
 for i in 1..KUBERNETES_MASTER_COUNT
-$kubernetesMasters << {
-    name: "#{$kubernetesMasterNamePrefix}#{i}",
-    hostname: "#{$kubernetesMasterNamePrefix}#{i}",
-    ipAddress: "#{$ipGroup}.#{$kubernetesMasterStartIp + i}"
-}
+  $kubernetesMasters << {
+      name: "#{$kubernetesMasterNamePrefix}#{i}",
+      hostname: "#{$kubernetesMasterNamePrefix}#{i}",
+      ipAddress: "#{$ipGroup}.#{$kubernetesMasterStartIp + i}"
+  }
 end
 
 for master in $kubernetesMasters
@@ -59,16 +59,16 @@ end
 $kubernetesMasterList = $kubernetesMasterList[1..-1]
 
 for i in 1..KUBERNETES_NODE_COUNT
-$kubernetesNodes << {
-    number: i,
-    name: "#{$kubernetesNodeNamePrefix}#{i}",
-    hostname: "#{$kubernetesNodeNamePrefix}#{i}",
-    ipAddress: "#{$ipGroup}.#{$kubernetesNodeStartIp + i}"
-}
+  $kubernetesNodes << {
+      number: i,
+      name: "#{$kubernetesNodeNamePrefix}#{i}",
+      hostname: "#{$kubernetesNodeNamePrefix}#{i}",
+      ipAddress: "#{$ipGroup}.#{$kubernetesNodeStartIp + i}"
+  }
 end
 
 for node in $kubernetesNodes
-    $hostsFileContent << node[:ipAddress] + " " + node[:hostname] + " " + node[:hostname] + "." + "#{$domainName}" + "\n"
+  $hostsFileContent << node[:ipAddress] + " " + node[:hostname] + " " + node[:hostname] + "." + "#{$domainName}" + "\n"
 end
 
 $cmdInitialSetup = <<SCRIPT
