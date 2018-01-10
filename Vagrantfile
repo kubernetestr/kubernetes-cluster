@@ -531,7 +531,7 @@ Vagrant.configure("2") do |config|
       box.vm.box = BOX_OS
       box.vm.box_version = BOX_VERSION
       box.vm.provider "virtualbox" do |v|
-        v.memory = 1024
+        v.memory = 2000
         v.cpus = 1
       end
       box.vm.hostname = node[:hostname]
