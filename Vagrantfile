@@ -238,6 +238,7 @@ ExecStart=/usr/bin/kube-apiserver \
   --advertise-address=INTERNAL_IP \
   --allow-privileged=true \
   --apiserver-count=2 \
+  --runtime-config=batch/v2alpha1=true \
   --authorization-mode=ABAC \
   --authorization-policy-file=/var/lib/kubernetes/authorization-policy.jsonl \
   --bind-address=0.0.0.0 \
