@@ -352,7 +352,9 @@ ExecStart=/usr/bin/dockerd \
   --ip-masq=false \
   --host=unix:///var/run/docker.sock \
   --log-level=error \
-  --storage-driver=overlay
+  --storage-driver=overlay \
+  --default-ulimit nofile=70000:70000 \
+  --default-ulimit nproc=70000:70000
 Restart=on-failure
 RestartSec=5
 
