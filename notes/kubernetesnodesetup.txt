@@ -233,7 +233,10 @@ ExecStart=/usr/bin/kube-proxy \
   --kubeconfig=/var/lib/kubelet/kubeconfig \
   --proxy-mode=iptables \
   --cluster-cidr=10.200.0.0/16 \
-  --v=2
+  --v=2 \
+  --masquerade-all=true
+ #https://github.com/kelseyhightower/kubernetes-the-hard-way/issues/171
+ #https://stackoverflow.com/questions/41574846/kubernetes-pods-replying-with-unexpected-source-for-dns-queries
 
 Restart=on-failure
 RestartSec=5
