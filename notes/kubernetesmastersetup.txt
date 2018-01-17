@@ -1,0 +1,141 @@
+KUBERNETES_VERSION="v1.8.4"
+KUBERNETES_OUTPUT_DIR="./kubernetes/"
+KUBERNETES_DOWNLOAD_PATH="https://storage.googleapis.com/kubernetes-release/release/$KUBERNETES_VERSION/bin/linux/amd64/"
+
+for binary in kube-apiserver kube-controller-manager kube-scheduler kubectl; do
+  if [ ! -f ${KUBERNETES_OUTPUT_DIR}${binary} ]; then
+    curl -L --create-dirs "${KUBERNETES_DOWNLOAD_PATH}${binary}" -o "${KUBERNETES_OUTPUT_DIR}${binary}"
+  fi
+done
+
+pushd $KUBERNETES_OUTPUT_DIR
+chmod +x kube-apiserver kube-controller-manager kube-scheduler kubectl
+sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/bin/
+popd
+
+CERT_PATH="/home/user/certs/"
+sudo mkdir -p /var/lib/kubernetes
+
+yes | cp ${CERT_PATH}ca.pem ${CERT_PATH}ca-key.pem ${CERT_PATH}ca-config.json /var/lib/kubernetes
+yes | cp ${CERT_PATH}kubernetes/kubernetes.pem ${CERT_PATH}kubernetes/kubernetes-key.pem /var/lib/kubernetes
+yes | cp ${CERT_PATH}etcd/etcd.pem ${CERT_PATH}etcd/etcd-key.pem /var/lib/kubernetes
+
+
+cat > token.csv <<"EOF"
+chAng3m3,admin,admin
+chAng3m3,scheduler,scheduler
+chAng3m3,kubelet,kubelet
+EOF
+sudo mv token.csv /var/lib/kubernetes/
+
+cat > authorization-policy.jsonl <<"EOF"
+{"apiVersion": "abac.authorization.kubernetes.io/v1beta1", "kind": "Policy", "spec": {"user":"*", "nonResourcePath": "*", "readonly": true}}
+{"apiVersion": "abac.authorization.kubernetes.io/v1beta1", "kind": "Policy", "spec": {"user":"admin", "namespace": "*", "resource": "*", "apiGroup": "*"}}
+{"apiVersion": "abac.authorization.kubernetes.io/v1beta1", "kind": "Policy", "spec": {"user":"scheduler", "namespace": "*", "resource": "*", "apiGroup": "*"}}
+{"apiVersion": "abac.authorization.kubernetes.io/v1beta1", "kind": "Policy", "spec": {"user":"kubelet", "namespace": "*", "resource": "*", "apiGroup": "*"}}
+{"apiVersion": "abac.authorization.kubernetes.io/v1beta1", "kind": "Policy", "spec": {"group":"system:serviceaccounts", "namespace": "*", "resource": "*", "apiGroup": "*", "nonResourcePath": "*"}}
+EOF
+sudo mv authorization-policy.jsonl /var/lib/kubernetes/
+
+export INTERNAL_IP=`ifconfig eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'`
+
+cat > kube-apiserver.service <<"EOF"
+[Unit]
+Description=Kubernetes API Server
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/bin/kube-apiserver \
+  --admission-control=NamespaceLifecycle,LimitRanger,ServiceAccount,ResourceQuota \
+  --advertise-address=INTERNAL_IP \
+  --allow-privileged=true \
+  --apiserver-count=2 \
+  --runtime-config=batch/v2alpha1=true \
+  --authorization-mode=ABAC \
+  --authorization-policy-file=/var/lib/kubernetes/authorization-policy.jsonl \
+  --bind-address=0.0.0.0 \
+  --enable-swagger-ui=true \
+  --etcd-cafile=/var/lib/kubernetes/ca.pem \
+  --etcd-certfile=/var/lib/kubernetes/etcd.pem \
+  --etcd-keyfile=/var/lib/kubernetes/etcd-key.pem \
+  --insecure-bind-address=0.0.0.0 \
+  --kubelet-certificate-authority=/var/lib/kubernetes/ca.pem \
+  --kubelet-client-certificate=/var/lib/kubernetes/kubernetes.pem \
+  --kubelet-client-key=/var/lib/kubernetes/kubernetes-key.pem \
+  --etcd-servers=https://172.31.105.3:2379,https://172.31.100.210:2379,https://172.31.114.218:2379 \
+  --service-account-key-file=/var/lib/kubernetes/ca-key.pem \
+  --service-cluster-ip-range=10.32.0.0/24 \
+  --service-node-port-range=30000-32767 \
+  --tls-ca-file=/var/lib/kubernetes/ca.pem \
+  --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \
+  --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \
+  --token-auth-file=/var/lib/kubernetes/token.csv \
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sed -i s/INTERNAL_IP/$INTERNAL_IP/g kube-apiserver.service
+sudo mv kube-apiserver.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable kube-apiserver
+sudo systemctl start kube-apiserver
+
+cat > kube-controller-manager.service <<"EOF"
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/bin/kube-controller-manager \
+  --allocate-node-cidrs=true \
+  --cluster-cidr=10.200.0.0/16 \
+  --cluster-name=kubernetes \
+  --leader-elect=true \
+  --master=http://INTERNAL_IP:8080 \
+  --root-ca-file=/var/lib/kubernetes/ca.pem \
+  --service-account-private-key-file=/var/lib/kubernetes/ca-key.pem \
+  --service-cluster-ip-range=10.32.0.0/24 \
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sed -i s/INTERNAL_IP/$INTERNAL_IP/g kube-controller-manager.service
+sudo mv kube-controller-manager.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable kube-controller-manager
+sudo systemctl start kube-controller-manager
+
+cat > kube-scheduler.service <<"EOF"
+[Unit]
+Description=Kubernetes Scheduler
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/bin/kube-scheduler \
+  --leader-elect=true \
+  --master=http://INTERNAL_IP:8080 \
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sed -i s/INTERNAL_IP/$INTERNAL_IP/g kube-scheduler.service
+sudo mv kube-scheduler.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable kube-scheduler
+sudo systemctl start kube-scheduler
+
+cat >> /etc/profile >>"EOF"
+source <(kubectl completion bash)
+EOF

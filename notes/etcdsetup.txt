@@ -1,0 +1,59 @@
+yum -y update
+
+service firewalld stop
+systemctl disable firewalld
+yum -y remove firewalld
+
+cat <<EOF > /etc/selinux/config
+SELINUX=disabled
+SELINUXTYPE=targeted
+EOF
+
+sudo mkdir -p /etc/etcd
+CERT_PATH="/home/user/certs/"
+yes | cp ${CERT_PATH}ca.pem ${CERT_PATH}ca-key.pem ${CERT_PATH}ca-config.json /etc/etcd
+yes | cp ${CERT_PATH}etcd/etcd.pem ${CERT_PATH}etcd/etcd-key.pem /etc/etcd
+
+ETCD_VERSION="v3.2.10"
+curl -Ls -o etcd.tar.gz https://storage.googleapis.com/etcd/${ETCD_VERSION}/etcd-${ETCD_VERSION}-linux-amd64.tar.gz
+yes | tar xzvf etcd.tar.gz
+yes | mv `ls -d etcd-*/` etcd/
+yes | cp etcd/etcd* /usr/bin/
+mkdir -p /var/lib/etcd
+
+cat > etcd.service <<"EOF"
+[Unit]
+Description=etcd
+Documentation=https://github.com/coreos
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/etcd --name ETCD_NAME \
+  --cert-file=/etc/etcd/etcd.pem \
+  --key-file=/etc/etcd/etcd-key.pem \
+  --peer-cert-file=/etc/etcd/etcd.pem \
+  --peer-key-file=/etc/etcd/etcd-key.pem \
+  --trusted-ca-file=/etc/etcd/ca.pem \
+  --peer-trusted-ca-file=/etc/etcd/ca.pem \
+  --initial-advertise-peer-urls https://INTERNAL_IP:2380 \
+  --listen-peer-urls https://INTERNAL_IP:2380 \
+  --listen-client-urls https://INTERNAL_IP:2379,http://127.0.0.1:2379 \
+  --advertise-client-urls https://INTERNAL_IP:2379 \
+  --initial-cluster-token etcd-cluster-0 \
+  --initial-cluster pamir1=https://172.31.105.3:2380,pamir2=https://172.31.100.210:2380,pamir3=https://172.31.114.218:2380 \
+  --initial-cluster-state new \
+  --data-dir=/var/lib/etcd
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+export INTERNAL_IP=`ifconfig eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'`
+export ETCD_NAME=$(hostname -s)
+sed -i s/INTERNAL_IP/$INTERNAL_IP/g etcd.service
+sed -i s/ETCD_NAME/$ETCD_NAME/g etcd.service
+yes | mv etcd.service /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable etcd

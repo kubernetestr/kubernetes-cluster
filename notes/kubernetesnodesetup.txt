@@ -1,0 +1,248 @@
+yum -y update
+
+service firewalld stop
+systemctl disable firewalld
+yum -y remove firewalld
+
+cat <<EOF > /etc/selinux/config
+SELINUX=disabled
+SELINUXTYPE=targeted
+EOF
+
+CFSSL_DOWNLOAD_PATH="https://pkg.cfssl.org/R1.2/"
+
+for binary in cfssl_linux-amd64 cfssljson_linux-amd64; do
+  if [ ! -f ${binary} ]; then
+    curl -L --create-dirs "${CFSSL_DOWNLOAD_PATH}${binary}" -o "${binary}"
+  fi
+done
+
+chmod +x cfssl_linux-amd64
+sudo mv cfssl_linux-amd64 /usr/local/bin/cfssl
+ln -s /usr/local/bin/cfssl /usr/bin/cfssl
+
+chmod +x cfssljson_linux-amd64
+sudo mv cfssljson_linux-amd64 /usr/local/bin/cfssljson
+ln -s /usr/local/bin/cfssljson /usr/bin/cfssljson
+
+sudo mkdir -p /var/lib/kubernetes
+export CERT_PATH=/home/user/certs/certs/
+
+cat > `hostname -s`-csr.json <<EOF
+{
+  "CN": "Kubernetes",
+  "key": {
+    "algo": "rsa",
+    "size": 2048
+  },
+  "names": [
+    {
+      "C": "NO",
+      "L": "Istanbul",
+      "O": "Kubernetes",
+      "OU": "Cluster",
+      "ST": "Istanbul"
+    }
+  ]
+}
+EOF
+
+cfssl gencert \
+  -ca=${CERT_PATH}ca.pem \
+  -ca-key=${CERT_PATH}ca-key.pem \
+  -config=${CERT_PATH}ca-config.json \
+  -hostname=`hostname`,`hostname -s`,`ifconfig eth0 | grep -oP '(?<=inet\s)\d+(\.\d+){3}'`,localhost,127.0.0.1 \
+  -profile=kubernetes \
+  `hostname -s`-csr.json | cfssljson -bare `hostname -s`
+
+yes | sudo cp ${CERT_PATH}ca.pem ${CERT_PATH}ca-key.pem `hostname -s`.pem `hostname -s`-key.pem /var/lib/kubernetes/
+
+
+
+sudo mkdir -p /etc/cni/net.d \
+  /opt/cni/bin \
+  /var/run/kubernetes \
+  /var/lib/kubelet
+
+
+DOCKER_VERSION="17.09.0"
+DOCKER_OUTPUT_DIR="./docker/"
+DOCKER_BINARY_NAME="docker-ce.tgz"
+DOCKER_DOWNLOAD_PATH="https://download.docker.com/linux/static/stable/x86_64/"
+
+if [ ! -f ${DOCKER_OUTPUT_DIR}${DOCKER_BINARY_NAME} ]; then
+  curl -L --create-dirs "${DOCKER_DOWNLOAD_PATH}docker-${DOCKER_VERSION}-ce.tgz" -o "${DOCKER_OUTPUT_DIR}${DOCKER_BINARY_NAME}"
+fi
+
+tar -xf "${DOCKER_OUTPUT_DIR}${DOCKER_BINARY_NAME}"
+sudo cp docker/docker* /usr/bin/
+
+CNI_PLUGIN_VERSION=v0.6.0
+CNI_PLUGIN_OUTPUT_DIR="./cni/"
+CNI_PLUGIN_BINARY_NAME="cni.tgz"
+CNI_PLUGIN_DOWNLOAD_PATH="https://github.com/containernetworking/plugins/releases/download/v0.6.0/"
+
+if [ ! -f ${CNI_PLUGIN_OUTPUT_DIR}${CNI_PLUGIN_BINARY_NAME} ]; then
+  curl -L --create-dirs "${CNI_PLUGIN_DOWNLOAD_PATH}cni-plugins-amd64-${CNI_PLUGIN_VERSION}.tgz" -o "${CNI_PLUGIN_OUTPUT_DIR}${CNI_PLUGIN_BINARY_NAME}"
+fi
+
+tar -xvf "${CNI_PLUGIN_OUTPUT_DIR}${CNI_PLUGIN_BINARY_NAME}" -C /opt/cni/bin/
+
+cat > docker.service <<"EOF"
+[Unit]
+Description=Docker Application Container Engine
+Documentation=http://docs.docker.io
+
+[Service]
+ExecStart=/usr/bin/dockerd \
+  --iptables=false \
+  --ip-masq=false \
+  --host=unix:///var/run/docker.sock \
+  --log-level=error \
+  --storage-driver=overlay \
+  --default-ulimit nofile=70000:70000 \
+  --default-ulimit nproc=70000:70000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo mv docker.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable docker
+sudo systemctl start docker
+
+KUBERNETES_VERSION="v1.8.4"
+KUBERNETES_OUTPUT_DIR="./kubernetes/"
+KUBERNETES_DOWNLOAD_PATH="https://storage.googleapis.com/kubernetes-release/release/$KUBERNETES_VERSION/bin/linux/amd64/"
+
+for binary in kubectl kube-proxy kubelet; do
+  if [ ! -f ${KUBERNETES_OUTPUT_DIR}${binary} ]; then
+    curl -L --create-dirs "${KUBERNETES_DOWNLOAD_PATH}${binary}" -o "${KUBERNETES_OUTPUT_DIR}${binary}"
+  fi
+done
+
+pushd ${KUBERNETES_OUTPUT_DIR}
+chmod +x kubectl kube-proxy kubelet
+sudo mv kubectl kube-proxy kubelet /usr/bin/
+popd
+
+cat > kubeconfig <<"EOF"
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority: /var/lib/kubernetes/ca.pem
+    server: https://172.31.105.3:6443
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    user: kubelet
+  name: kubelet
+current-context: kubelet
+users:
+- name: kubelet
+  user:
+    token: chAng3m3
+EOF
+sudo mv kubeconfig /var/lib/kubelet/
+
+cat > 10-bridge.conf <<EOF
+{
+    "cniVersion": "0.3.1",
+    "name": "bridge",
+    "type": "bridge",
+    "bridge": "cnio0",
+    "isGateway": true,
+    "ipMasq": true,
+    "ipam": {
+        "type": "host-local",
+        "ranges": [
+          [{"subnet": "10.200.NUMBER.0/24"}]
+        ],
+        "routes": [{"dst": "0.0.0.0/0"}]
+    }
+}
+EOF
+
+export NUMBER=`hostname -s | grep -oP '\d'`
+sed -i s/NUMBER/$NUMBER/g 10-bridge.conf
+
+cat > 99-loopback.conf <<EOF
+{
+    "cniVersion": "0.3.1",
+    "type": "loopback"
+}
+EOF
+sudo mv 10-bridge.conf 99-loopback.conf /etc/cni/net.d/
+
+cat > kubelet.service <<"EOF"
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+After=docker.service
+Requires=docker.service
+
+[Service]
+ExecStart=/usr/bin/kubelet \
+  --allow-privileged=true \
+  --cloud-provider= \
+  --cluster-dns=10.32.0.10 \
+  --cluster-domain=cluster.local \
+  --container-runtime=docker \
+  --docker=unix:///var/run/docker.sock \
+  --network-plugin=cni \
+  --kubeconfig=/var/lib/kubelet/kubeconfig \
+  --fail-swap-on=false \
+  --serialize-image-pulls=false \
+  --tls-cert-file=/var/lib/kubernetes/HOSTNAME.pem \
+  --tls-private-key-file=/var/lib/kubernetes/HOSTNAME-key.pem \
+  --runtime-cgroups=/systemd/system.slice \
+  --kubelet-cgroups=/systemd/system.slice \
+  --pod-cidr=10.200.NUMBER.0/24 \
+  --pod_infra_container_image=gcr.io/google_containers/pause-amd64:3.1 \
+  --v=2
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+export HOSTNAME=`hostname -s`
+sed -i s/NUMBER/$NUMBER/g kubelet.service
+sed -i s/HOSTNAME/$HOSTNAME/g kubelet.service
+
+sudo mv kubelet.service /etc/systemd/system/
+
+sudo systemctl daemon-reload
+sudo systemctl enable kubelet
+sudo systemctl start kubelet
+
+cat > kube-proxy.service <<"EOF"
+[Unit]
+Description=Kubernetes Kube Proxy
+Documentation=https://github.com/GoogleCloudPlatform/kubernetes
+
+[Service]
+ExecStart=/usr/bin/kube-proxy \
+  --master=https://172.31.105.3:6443 \
+  --kubeconfig=/var/lib/kubelet/kubeconfig \
+  --proxy-mode=iptables \
+  --cluster-cidr=10.200.0.0/16 \
+  --v=2
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo mv kube-proxy.service /etc/systemd/system/
+
+sudo systemctl daemon-reload
+sudo systemctl enable kube-proxy
+sudo systemctl start kube-proxy

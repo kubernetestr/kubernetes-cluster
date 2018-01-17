@@ -542,7 +542,7 @@ Vagrant.configure("2") do |config|
       box.vm.synced_folder ".", "/vagrant", disabled: false, type: "rsync", rsync__auto: true
       box.vm.provision "shell", inline: $cmdInitialSetup
       box.vm.provision "shell", inline: $cmdNodeCertificateSetup % {hostname: node[:hostname], ipAddress: node[:ipAddress]}
-      box.vm.provision "shell", inline: $cmdKubernetesNodeSetup % {number: node[:number] - 1, hostname: node[:hostname]}
+      box.vm.provision "shell", inline: $cmdKubernetesNodeSetup % {number: node[:number], hostname: node[:hostname]}
       box.vm.provision "shell", inline: $cmdReboot
     end
   end
