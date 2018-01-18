@@ -471,6 +471,7 @@ ExecStart=/usr/bin/kube-proxy \
   --kubeconfig=/var/lib/kubelet/kubeconfig \
   --proxy-mode=iptables \
   --cluster-cidr=10.200.0.0/16 \
+  --masquerade-all=true \
   --v=2
 
 Restart=on-failure
