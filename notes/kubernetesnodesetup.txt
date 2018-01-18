@@ -168,7 +168,7 @@ cat > 10-bridge.conf <<EOF
 }
 EOF
 
-export NUMBER=`hostname -s | grep -oP '\d'`
+export NUMBER=`hostname -s | grep -oP '\d+'`
 sed -i s/NUMBER/$NUMBER/g 10-bridge.conf
 
 cat > 99-loopback.conf <<EOF
