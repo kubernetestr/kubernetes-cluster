@@ -3,7 +3,7 @@ yum -y update
 service firewalld stop
 systemctl disable firewalld
 yum -y remove firewalld
-
+yum -y install net-tools
 cat <<EOF > /etc/selinux/config
 SELINUX=disabled
 SELINUXTYPE=targeted
