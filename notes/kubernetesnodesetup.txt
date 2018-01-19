@@ -204,6 +204,7 @@ ExecStart=/usr/bin/kubelet \
   --kubelet-cgroups=/systemd/system.slice \
   --pod-cidr=10.200.NUMBER.0/24 \
   --pod_infra_container_image=gcr.io/google_containers/pause-amd64:3.1 \
+  --feature-gates PersistentLocalVolumes=true \
   --v=2
 
 Restart=on-failure

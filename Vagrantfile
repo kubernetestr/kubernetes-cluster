@@ -258,6 +258,7 @@ ExecStart=/usr/bin/kube-apiserver \
   --tls-cert-file=/var/lib/kubernetes/kubernetes.pem \
   --tls-private-key-file=/var/lib/kubernetes/kubernetes-key.pem \
   --token-auth-file=/var/lib/kubernetes/token.csv \
+  --feature-gates PersistentLocalVolumes=true \
   --v=2
 Restart=on-failure
 RestartSec=5
@@ -446,6 +447,7 @@ ExecStart=/usr/bin/kubelet \
   --runtime-cgroups=/systemd/system.slice \
   --kubelet-cgroups=/systemd/system.slice \
   --pod-cidr=10.200.%{number}.0/24 \
+  --feature-gates PersistentLocalVolumes=true \
   --v=2
 
 Restart=on-failure
